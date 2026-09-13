@@ -1,0 +1,186 @@
+:root {
+  --bg: #14171c;
+  --panel: #1c2029;
+  --panel-2: #232833;
+  --line: #2f3643;
+  --text: #e6e9ef;
+  --muted: #97a0b0;
+  --accent: #5aa9e6;
+
+  --tile-face: #f4f1e8;
+  --tile-ink: #222;
+  --tile-red: #c0392b;
+
+  /* 安全度5段階（4.5.1） */
+  --lv1: #2e9e5b;
+  --lv2: #7bbf4a;
+  --lv3: #d7b731;
+  --lv4: #e08b34;
+  --lv5: #d64545;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  overscroll-behavior: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+#app {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 12px 4px;
+}
+
+/* --- ヘッダー --- */
+.header { display: grid; gap: 4px; margin-bottom: 8px; }
+.head-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.head-line strong { font-size: 15px; }
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--panel); color: var(--muted); font-size: 12px;
+}
+
+/* --- アシスト --- */
+.assist { margin-bottom: 8px; }
+.suggest { display: flex; gap: 8px; }
+.suggest-card {
+  flex: 1; display: grid; grid-template-columns: auto 1fr; grid-auto-rows: auto;
+  gap: 2px 8px; align-items: center;
+  padding: 8px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line);
+}
+.card-title { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.card-tile { grid-row: 2 / 4; width: 34px; }
+.card-name { font-weight: 600; }
+.card-extra { grid-column: 2; font-size: 11px; color: var(--muted); }
+.lv { grid-column: 2; justify-self: start; font-size: 11px; padding: 1px 6px; border-radius: 4px; color: #10131a; font-weight: 700; }
+.lv1 { background: var(--lv1); } .lv2 { background: var(--lv2); } .lv3 { background: var(--lv3); }
+.lv4 { background: var(--lv4); } .lv5 { background: var(--lv5); }
+
+.yaku { margin-top: 6px; padding: 6px 8px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.yaku-head { display: flex; align-items: baseline; gap: 8px; }
+.shanten { font-weight: 700; color: var(--accent); }
+.note { font-size: 10px; color: var(--muted); }
+.yaku ul { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 4px 0 0; padding: 0; list-style: none; }
+.yaku li { font-size: 12px; }
+.yaku li span { color: var(--muted); margin-left: 4px; }
+
+/* --- 他家 --- */
+.opponents { display: grid; gap: 4px; margin-bottom: 8px; }
+.opp { border-radius: 8px; background: var(--panel); border: 1px solid var(--line); }
+.opp.is-riichi { border-color: var(--lv5); }
+.opp summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; cursor: pointer; }
+.opp-name { font-weight: 600; min-width: 2.5em; }
+.opp-count { margin-left: auto; font-size: 11px; color: var(--muted); }
+.flag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--panel-2); color: var(--text); }
+.flag-riichi { background: var(--lv5); color: #10131a; font-weight: 700; }
+.flag-honitsu, .flag-yakuhai { background: var(--lv4); color: #10131a; }
+.flag-none { color: var(--muted); }
+.opp-body { padding: 4px 8px 8px; display: grid; gap: 4px; }
+.row { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.row-label { font-size: 11px; color: var(--muted); margin-right: 4px; }
+
+/* --- 手牌 --- */
+.hand-area { margin-bottom: 8px; }
+.hand { display: flex; gap: 3px; flex-wrap: wrap; }
+.hand-tile {
+  position: relative; padding: 0; border: 0; background: none; cursor: pointer;
+  width: 40px; display: grid; gap: 2px;
+}
+.hand-tile .bar { height: 4px; border-radius: 2px; display: block; }
+.hand-tile .dots { display: flex; gap: 2px; justify-content: center; }
+.dot { width: 8px; height: 4px; border-radius: 1px; display: inline-block; }
+.dot.lv1 { background: var(--lv1); } .dot.lv2 { background: var(--lv2); } .dot.lv3 { background: var(--lv3); }
+.dot.lv4 { background: var(--lv4); } .dot.lv5 { background: var(--lv5); }
+.bar.lv1 { background: var(--lv1); } .bar.lv2 { background: var(--lv2); } .bar.lv3 { background: var(--lv3); }
+.bar.lv4 { background: var(--lv4); } .bar.lv5 { background: var(--lv5); }
+.hand-melds { display: flex; gap: 6px; margin-top: 6px; }
+.meld { display: inline-flex; gap: 1px; }
+
+/* --- 牌 --- */
+.tile-svg { display: block; width: 100%; height: auto; }
+.tile-svg.is-dim { opacity: .35; }
+.t-face { fill: var(--tile-face); stroke: #0006; stroke-width: 1; }
+.t-num { font: 700 22px/1 system-ui, sans-serif; text-anchor: middle; }
+.t-suit { font: 600 13px/1 system-ui, sans-serif; text-anchor: middle; }
+.t-honor { font: 700 26px/1 system-ui, sans-serif; text-anchor: middle; }
+.mini { display: inline-block; width: 20px; vertical-align: middle; }
+.mini.is-riichi { transform: rotate(90deg); }
+.mini.is-indicator { opacity: .85; }
+
+/* --- 入力パッド --- */
+.pad {
+  flex: none; background: var(--panel); border-top: 1px solid var(--line);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  display: grid; gap: 6px;
+}
+.pad-modes, .pad-toggles { display: flex; gap: 4px; flex-wrap: wrap; }
+.mode, .toggle, .chip {
+  padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); font-size: 12px; cursor: pointer;
+}
+.mode.is-active, .chip.is-active { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 700; }
+.toggle.is-on { background: var(--lv5); color: #10131a; border-color: var(--lv5); font-weight: 700; }
+.meld-bar { display: grid; gap: 4px; padding: 6px; background: var(--panel-2); border-radius: 8px; }
+.meld-bar > div { display: flex; gap: 4px; flex-wrap: wrap; }
+.hint { margin: 0; font-size: 11px; color: var(--muted); }
+
+.pad-grid { display: grid; gap: 3px; }
+.pad-row { display: flex; align-items: center; gap: 2px; }
+.pad-label { width: 1.4em; font-size: 11px; color: var(--muted); flex: none; }
+.pad-tile {
+  position: relative; flex: 1; min-width: 0; max-width: 40px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+}
+.pad-tile.is-out { opacity: .3; }
+.pad-tile .left {
+  position: absolute; right: 0; bottom: 0;
+  font-size: 9px; line-height: 1; padding: 1px 2px; border-radius: 3px;
+  background: #000a; color: #fff;
+}
+
+/* --- 設定画面 --- */
+.setup h1 { font-size: 16px; margin: 4px 0 10px; }
+.setup-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.setup label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.setup select, .setup input {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; font-size: 13px;
+}
+.setup input[type="number"] { width: 4em; }
+.primary {
+  margin-top: 10px; padding: 8px 16px; border-radius: 8px; border: 0;
+  background: var(--accent); color: #0d1117; font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.primary:disabled { opacity: .4; cursor: not-allowed; }
+.ghost {
+  margin-left: auto; padding: 4px 10px; border-radius: 6px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  font-size: 12px; cursor: pointer;
+}
+.empty { color: var(--muted); font-size: 12px; }
+
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+dialog::backdrop { background: #000a; }
+.dialog-actions { display: grid; gap: 8px; }
+.dialog-actions .ghost { margin-left: 0; }
+
+/* --- Mac など広い画面 --- */
+@media (min-width: 720px) {
+  #app { padding: 12px 20px; }
+  .pad-tile { max-width: 46px; }
+  .hand-tile { width: 52px; }
+  .opp .opp-body { display: grid; }
+}

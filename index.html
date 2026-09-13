@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>麻雀アシスト</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="app">
+  <section id="setup" class="setup"></section>
+
+  <section id="board" class="board" hidden>
+    <header id="header" class="header"></header>
+    <section id="assist" class="assist"></section>
+    <section id="opponents" class="opponents"></section>
+    <section id="hand" class="hand-area"></section>
+  </section>
+</main>
+
+<footer id="pad" class="pad"></footer>
+
+<dialog id="round-dialog">
+  <p>次の局はどちらですか？</p>
+  <div class="dialog-actions">
+    <button class="primary" data-action="renchan">親継続（本場+1）</button>
+    <button class="primary" data-action="tsugi">次局へ</button>
+    <button class="ghost" data-action="cancel-round">やめる</button>
+  </div>
+</dialog>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>

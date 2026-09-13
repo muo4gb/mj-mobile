@@ -1,0 +1,62 @@
+# 麻雀アシスト
+
+セガNET麻雀MJ（モバイル版）の友人戦で使う、手入力型のアシストツール。
+局面を手で入力すると、他家に対する安全度と、向聴数・受け入れ・役候補を出す。
+
+要件と設計の詳細は [docs/requirements.md](docs/requirements.md)。
+
+## 使い方
+
+1. 場風・自風・ルールを選び、ドラ表示牌と配牌を入力して「開始」
+2. 対局中は下の入力パッドで、入力先（自分ツモ／各家の捨て牌／鳴き／ドラ表示牌）を選んでタップ
+3. 自分の打牌は手牌をタップ
+4. 「取消」で直前の入力を取り消す
+5. 局が終わったら「次の局へ」
+
+手牌の各牌の下には、3家それぞれに対する安全度が色で出る（緑＝現物 … 赤＝危険）。
+入力内容は自動保存され、リロードしても復元する。
+
+## 動かす
+
+ESモジュールを使っているので `file://` では動かない。HTTPで配信する。
+
+```sh
+python3 -m http.server 8000
+# http://localhost:8000
+```
+
+## テスト
+
+ビルド不要。判定ロジックは Node でそのまま実行できる。
+
+```sh
+node test/shanten.test.mjs
+node test/safety.test.mjs
+```
+
+## 構成
+
+```
+index.html
+styles.css
+src/
+  app.js            画面と入力の配線
+  core/
+    tiles.js        牌の表現、ドラの導出
+    log.js          操作ログと状態の再計算、localStorage
+    shanten.js      向聴数・受け入れ
+    safety.js       現物・スジ・壁による安全度5段階、警戒フラグ
+    suggest.js      推奨打牌・最安全牌
+    yaku.js         役候補
+  ui/
+    tile-svg.js     牌のSVG
+    board.js        ヘッダー・アシスト・他家・手牌
+    pad.js          入力パッド
+```
+
+状態は持たず、操作ログから毎回再計算する。取り消しはログ末尾の削除、編集はログの差し替え。
+
+## 注意
+
+MJの利用規約との関係は [docs/requirements.md](docs/requirements.md) の7章を参照。
+現在は GitHub Pages で公開しているが、リポジトリは private へ移す予定（9章）。
