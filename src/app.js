@@ -1,11 +1,14 @@
 // 画面と入力の配線
+//
+// 対局中は「次の入力」（state.expect）に向かって牌をタップするだけで進む。
+// 順番どおりでない入力は手動で入力先を指定する（1回で自動送りに戻る）。
 
-import { parseTile, ALL_TILES } from './core/tiles.js';
+import { parseTile, tileToString, ALL_TILES } from './core/tiles.js';
 import { initialLog, replay, save, load, clear, nextRoundLog, SEATS } from './core/log.js';
 import { analyze } from './core/suggest.js';
 import { yakuCandidates } from './core/yaku.js';
 import { renderHeader, renderAssist, renderOpponents, renderHand } from './ui/board.js';
-import { renderPad } from './ui/pad.js';
+import { renderPad, lastDiscard } from './ui/pad.js';
 import { tileSvg } from './ui/tile-svg.js';
 
 const el = {
@@ -19,7 +22,15 @@ const el = {
 };
 
 let log = load() ?? initialLog();
-const ui = { mode: 'haipai', red: false, riichi: false, meldDraft: { seat: 1, kind: 'pon', tiles: [] } };
+const ui = {
+  setupMode: 'haipai',
+  override: null,
+  red: false,
+  riichi: false,
+  meldDraft: { kind: 'ankan' },
+  quickCall: null,
+  notice: null,
+};
 
 const isStarted = () => log.some((e) => e.type === 'start');
 
@@ -29,12 +40,11 @@ function commit(next) {
   render();
 }
 
-function push(event) {
-  commit([...log, event]);
-}
+const push = (event) => commit([...log, event]);
 
 function undo() {
   if (log.length <= 1) return;
+  ui.quickCall = null;
   commit(log.slice(0, -1));
 }
 
@@ -46,19 +56,22 @@ function render() {
 
   if (started) {
     el.setup.innerHTML = '';
-    if (ui.mode === 'haipai') ui.mode = 'draw';
     const analysis = analyze(state);
-    const yaku = yakuCandidates(state);
     el.header.innerHTML = renderHeader(state);
-    el.assist.innerHTML = renderAssist(state, analysis, yaku);
+    el.assist.innerHTML = renderAssist(state, analysis, yakuCandidates(state));
     el.opponents.innerHTML = renderOpponents(state);
     el.hand.innerHTML = renderHand(state, analysis);
   } else {
     renderSetup(state);
   }
 
-  const remaining = ALL_TILES.map((i) => 4 - state.visible[i]);
-  el.pad.innerHTML = renderPad({ ...ui, setup: !started, remaining });
+  el.pad.innerHTML = renderPad({
+    ...ui,
+    state,
+    setup: !started,
+    remaining: ALL_TILES.map((i) => 4 - state.visible[i]),
+  });
+  ui.notice = null;
 }
 
 // --- 局開始時の設定（4.1） ---
@@ -106,125 +119,152 @@ function renderSetup(state) {
   `;
 }
 
-function editInit(patch) {
+const editInit = (patch) => {
   const [init, ...rest] = log;
   commit([{ ...init, ...patch }, ...rest]);
-}
+};
 
 // --- 入力 ---
 
 function onPadTile(tileStr) {
-  const init = log[0];
-  switch (ui.mode) {
-    case 'haipai':
-      editInit({ hand: [...init.hand, tileStr] });
-      break;
-    case 'dora':
-      if (!isStarted()) editInit({ doraIndicator: tileStr });
-      else push({ type: 'dora', tile: tileStr }); // 槓ドラ
-      break;
-    case 'draw':
-      push({ type: 'draw', tile: tileStr });
-      break;
+  if (!isStarted()) {
+    if (ui.setupMode === 'dora') editInit({ doraIndicator: tileStr });
+    else editInit({ hand: [...log[0].hand, tileStr] });
+    return;
+  }
+
+  const state = replay(log);
+  const target = ui.override;
+  ui.override = null;
+  ui.quickCall = null;
+
+  switch (target) {
+    case 'dora': return push({ type: 'dora', tile: tileStr });
+    case 'draw': return push({ type: 'draw', tile: tileStr });
     case 'discard1':
     case 'discard2':
-    case 'discard3': {
-      const seat = Number(ui.mode.slice(-1));
-      push({ type: 'discard', seat, tile: tileStr, riichi: ui.riichi });
-      ui.riichi = false;
-      break;
-    }
-    case 'meld':
-      addMeldTile(tileStr);
-      break;
-    default:
-      break;
+      return pushDiscard(Number(target.slice(-1)), tileStr);
+    case 'discard3':
+      return pushDiscard(3, tileStr);
+    case 'meld': return pushSelfKan(state, tileStr);
+    default: return applyExpected(state, tileStr);
   }
 }
 
-function addMeldTile(tileStr) {
-  const draft = ui.meldDraft;
-  const { kind, seat } = draft;
-  if (kind === 'chi') {
-    draft.tiles.push(tileStr);
-    if (draft.tiles.length < 3) {
-      render();
-      return;
-    }
-  } else {
-    const n = kind === 'pon' ? 3 : 4;
-    draft.tiles = new Array(n).fill(tileStr);
-  }
-  push({ type: 'call', seat, kind, tiles: draft.tiles, from: null });
-  draft.tiles = [];
+/** 打順から決まる「次の入力」に当てはめる */
+function applyExpected(state, tileStr) {
+  const { kind, seat } = state.expect;
+  if (kind === 'draw') return push({ type: 'draw', tile: tileStr });
+  if (seat !== SEATS.SELF) return pushDiscard(seat, tileStr);
+
+  // 自分の打牌。パッドからも切れるようにしておくとツモ切りが2タップで済む
+  if (state.hand.includes(tileStr)) return pushDiscard(SEATS.SELF, tileStr);
+  ui.notice = '手牌にありません';
+  return render();
 }
 
-function onDiscardFromHand(tileStr) {
-  push({ type: 'discard', seat: SEATS.SELF, tile: tileStr, riichi: ui.riichi });
+function pushDiscard(seat, tileStr) {
+  const riichi = ui.riichi;
   ui.riichi = false;
+  push({ type: 'discard', seat, tile: tileStr, riichi });
+}
+
+function pushSelfKan(state, tileStr) {
+  const kind = ui.meldDraft.kind;
+  const tiles = kind === 'kakan' ? [tileStr] : [tileStr, tileStr, tileStr, tileStr];
+  push({ type: 'call', seat: SEATS.SELF, kind, tiles, from: null });
+}
+
+/** 直前の捨て牌への鳴き */
+function applyQuickCall(kind, chi) {
+  const state = replay(log);
+  const last = lastDiscard(state);
+  if (!last || !ui.quickCall) return;
+  const seat = ui.quickCall.seat;
+  ui.quickCall = null;
+
+  const discarded = tileToString(last.index, last.red);
+  let tiles;
+  if (chi) {
+    tiles = [...chi.map((i) => tileToString(i)), discarded]
+      .sort((a, b) => parseTile(a).index - parseTile(b).index);
+  } else {
+    const plain = tileToString(last.index);
+    tiles = kind === 'pon' ? [discarded, plain, plain] : [discarded, plain, plain, plain];
+  }
+  push({ type: 'call', seat, kind: chi ? 'chi' : kind, tiles, from: last.seat });
 }
 
 function nextRound(renchan) {
   const state = replay(log);
   clear();
-  ui.mode = 'haipai';
+  Object.assign(ui, { setupMode: 'haipai', override: null, riichi: false, quickCall: null });
   commit(nextRoundLog(state, { renchan }));
 }
 
 // --- イベント ---
 
-document.addEventListener('click', (ev) => {
-  const target = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-mode], [data-toggle], [data-action], [data-meld-seat], [data-meld-kind]');
-  if (!target) return;
+const DIALOG = () => document.getElementById('round-dialog');
 
-  if (target.dataset.tile) return onPadTile(target.dataset.tile), render();
-  if (target.dataset.discard) return onDiscardFromHand(target.dataset.discard);
-  if (target.dataset.remove) {
+document.addEventListener('click', (ev) => {
+  const t = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-setup-mode], [data-override], [data-toggle], [data-action], [data-call-seat], [data-call-kind], [data-call-chi], [data-meld-kind]');
+  if (!t) return;
+  const d = t.dataset;
+
+  if (d.tile) return onPadTile(d.tile);
+  if (d.discard) {
+    ui.quickCall = null;
+    return pushDiscard(SEATS.SELF, d.discard);
+  }
+  if (d.remove) {
     const hand = [...log[0].hand];
-    const at = hand.indexOf(target.dataset.remove);
+    const at = hand.indexOf(d.remove);
     if (at >= 0) hand.splice(at, 1);
     return editInit({ hand });
   }
-  if (target.dataset.mode) {
-    ui.mode = target.dataset.mode;
-    ui.meldDraft.tiles = [];
+  if (d.setupMode) {
+    ui.setupMode = d.setupMode;
     return render();
   }
-  if (target.dataset.meldSeat) {
-    ui.meldDraft.seat = Number(target.dataset.meldSeat);
-    ui.meldDraft.tiles = [];
+  if (d.override) {
+    ui.override = ui.override === d.override ? null : d.override;
+    ui.quickCall = null;
     return render();
   }
-  if (target.dataset.meldKind) {
-    ui.meldDraft.kind = target.dataset.meldKind;
-    ui.meldDraft.tiles = [];
+  if (d.callSeat) {
+    ui.quickCall = d.callSeat === 'cancel' ? null : { seat: Number(d.callSeat) };
     return render();
   }
-  if (target.dataset.toggle) {
-    ui[target.dataset.toggle] = !ui[target.dataset.toggle];
+  if (d.callKind) return applyQuickCall(d.callKind, null);
+  if (d.callChi) return applyQuickCall('chi', d.callChi.split(',').map(Number));
+  if (d.meldKind) {
+    ui.meldDraft.kind = d.meldKind;
+    return render();
+  }
+  if (d.toggle) {
+    ui[d.toggle] = !ui[d.toggle];
     return render();
   }
 
-  switch (target.dataset.action) {
+  switch (d.action) {
     case 'undo': return undo();
-    case 'start': ui.mode = 'draw'; return push({ type: 'start' });
-    case 'next-round': return document.getElementById('round-dialog').showModal();
-    case 'renchan': document.getElementById('round-dialog').close(); return nextRound(true);
-    case 'tsugi': document.getElementById('round-dialog').close(); return nextRound(false);
-    case 'cancel-round': return document.getElementById('round-dialog').close();
+    case 'start': return push({ type: 'start' });
+    case 'next-round': return DIALOG().showModal();
+    case 'renchan': DIALOG().close(); return nextRound(true);
+    case 'tsugi': DIALOG().close(); return nextRound(false);
+    case 'cancel-round': return DIALOG().close();
     default: return undefined;
   }
 });
 
 document.addEventListener('change', (ev) => {
-  const target = ev.target;
-  if (target.dataset.init) {
-    const value = target.type === 'number' ? Number(target.value) : target.value;
-    editInit({ [target.dataset.init]: value });
+  const d = ev.target.dataset;
+  if (d.init) {
+    editInit({ [d.init]: ev.target.type === 'number' ? Number(ev.target.value) : ev.target.value });
   }
-  if (target.dataset.rule) {
+  if (d.rule) {
     const rules = { ...log[0].rules };
-    rules[target.dataset.rule] = target.dataset.rule === 'kuitan' ? target.value === '1' : Number(target.value);
+    rules[d.rule] = d.rule === 'kuitan' ? ev.target.value === '1' : Number(ev.target.value);
     editInit({ rules });
   }
 });

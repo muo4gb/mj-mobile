@@ -54,11 +54,19 @@ export function replay(log) {
   };
   if (init.doraIndicator) state.doraIndicators.push(init.doraIndicator);
 
+  const seatWinds = [0, 1, 2, 3].map((seat) => indexOf('z', seatWindNumber(jikaze, seat)));
+  const dealer = seatWinds.indexOf(indexOf('z', 1));
+
+  // 打順の追跡。親が14枚持って打つところから始まる。
+  // 自分の番だけは「ツモ→打牌」の2段階になる（他家のツモは見えないので記録しない）。
+  let turn = { seat: dealer, needDraw: false };
+
   let seq = 0;
   for (const ev of log.slice(1)) {
     switch (ev.type) {
       case 'draw':
         state.hand.push(ev.tile);
+        turn = { seat: SEATS.SELF, needDraw: false };
         break;
 
       case 'discard': {
@@ -73,11 +81,31 @@ export function replay(log) {
           state.turn += 1;
         }
         seq += 1;
+        {
+          const next = (ev.seat + 1) % 4;
+          turn = { seat: next, needDraw: next === SEATS.SELF };
+        }
         break;
       }
 
       case 'call': {
-        state.melds[ev.seat].push({ kind: ev.kind, tiles: ev.tiles, from: ev.from ?? null });
+        // 加槓はポンした面子に1枚足す形なので、新しい面子にはしない
+        const upgraded = ev.kind === 'kakan'
+          ? state.melds[ev.seat].find(
+              (m) => m.kind === 'pon' && parseTile(m.tiles[0]).index === parseTile(ev.tiles[0]).index,
+            )
+          : null;
+        if (upgraded) {
+          upgraded.kind = 'kakan';
+          upgraded.tiles = [...upgraded.tiles, ev.tiles[ev.tiles.length - 1]];
+        } else {
+          state.melds[ev.seat].push({ kind: ev.kind, tiles: ev.tiles, from: ev.from ?? null });
+        }
+        // 鳴いた家に順番が移る。槓は嶺上牌を引くので自分なら先にツモ入力。
+        turn = {
+          seat: ev.seat,
+          needDraw: ev.seat === SEATS.SELF && ['minkan', 'ankan', 'kakan'].includes(ev.kind),
+        };
         if (ev.seat === SEATS.SELF) {
           // 手牌から晒した牌を抜く（ロン牌・ポン元の牌は手牌にないので見つかった分だけ）
           for (const t of ev.tiles) {
@@ -100,12 +128,15 @@ export function replay(log) {
     }
   }
 
+  state.expect = { seat: turn.seat, kind: turn.needDraw ? 'draw' : 'discard' };
+  // 鳴けるのは直前の捨て牌に対してだけ
+  state.callable = log[log.length - 1]?.type === 'discard';
   state.dora = state.doraIndicators.map((t) => doraFromIndicator(parseTile(t).index));
   state.handCounts = countsOf(state.hand);
   state.meldCount = state.melds[SEATS.SELF].length;
   state.visible = computeVisible(state);
-  state.seatWinds = [0, 1, 2, 3].map((s) => indexOf('z', seatWindNumber(jikaze, s)));
-  state.dealer = state.seatWinds.indexOf(indexOf('z', 1));
+  state.seatWinds = seatWinds;
+  state.dealer = dealer;
   return state;
 }
 

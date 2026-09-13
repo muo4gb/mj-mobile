@@ -127,6 +127,35 @@ body {
   display: grid; gap: 6px;
 }
 .pad-modes, .pad-toggles { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* 次の入力 */
+.pad-next {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 5px 8px; border-radius: 8px;
+  background: var(--panel-2); border: 1px solid var(--accent);
+}
+.pad-next.is-manual { border-color: var(--lv4); }
+.next-label { font-size: 10px; color: var(--muted); }
+.next-target { font-size: 15px; color: var(--accent); }
+.pad-next.is-manual .next-target { color: var(--lv4); }
+.pad-next .toggle { margin-left: 0; padding: 4px 8px; }
+.pad-next .toggle:first-of-type { margin-left: auto; }
+.notice { font-size: 11px; color: var(--lv5); }
+
+/* 直前の捨て牌への鳴き */
+.quick-call {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  padding: 4px 6px; border-radius: 8px; background: var(--panel-2);
+}
+.qc-label { font-size: 11px; color: var(--muted); }
+.chip.sm { padding: 3px 7px; font-size: 11px; }
+
+.pad-manual > summary {
+  font-size: 11px; color: var(--muted); cursor: pointer; padding: 2px 0; list-style: none;
+}
+.pad-manual > summary::-webkit-details-marker { display: none; }
+.pad-manual > summary::before { content: '⋯ '; }
+.pad-overrides { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 4px; }
 .mode, .toggle, .chip {
   padding: 5px 9px; border-radius: 6px; border: 1px solid var(--line);
   background: var(--panel-2); color: var(--text); font-size: 12px; cursor: pointer;
