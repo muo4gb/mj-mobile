@@ -66,13 +66,15 @@ function render() {
     renderSetup(state);
   }
 
-  el.pad.innerHTML = renderPad({
+  const padHtml = renderPad({
     ...ui,
     state,
     setup: !started,
     handCount: log[0].hand.length,
     remaining: ALL_TILES.map((i) => 4 - state.visible[i]),
   });
+  el.pad.hidden = padHtml === '';
+  el.pad.innerHTML = padHtml;
   ui.notice = null;
 }
 
@@ -117,7 +119,13 @@ function renderSetup(state) {
       <span class="step-no">${st.id}</span>${st.label}
     </button>`).join('');
 
-  el.setup.innerHTML = `<div class="steps">${tabs}</div>${[renderStepRound, renderStepDora, renderStepHaipai][step - 1](init, state, need)}`;
+  el.setup.innerHTML = `
+    <div class="setup-head">
+      <span class="setup-title">局の設定</span>
+      <button class="ghost" data-action="menu">メニュー</button>
+    </div>
+    <div class="steps">${tabs}</div>
+    ${[renderStepRound, renderStepDora, renderStepHaipai][step - 1](init, state, need)}`;
 }
 
 function renderStepRound(init, state) {
@@ -322,15 +330,18 @@ function renderMenu() {
       </div>`;
     return;
   }
-  body.innerHTML = `
-    <p class="dialog-title">メニュー</p>
+  const progress = isStarted() ? `
     <div class="dialog-group">
       <span class="dialog-label">局の進行</span>
       <div class="dialog-actions">
         <button class="primary" data-action="renchan">親継続（本場+1）</button>
         <button class="primary" data-action="tsugi">次局へ</button>
       </div>
-    </div>
+    </div>` : '';
+
+  body.innerHTML = `
+    <p class="dialog-title">メニュー</p>
+    ${progress}
     <div class="dialog-group">
       <span class="dialog-label">リセット</span>
       <div class="dialog-actions">

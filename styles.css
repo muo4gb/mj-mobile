@@ -126,6 +126,8 @@ body {
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
   display: grid; gap: 6px;
 }
+/* display を指定しているので [hidden] のUAスタイルが効かない */
+.pad[hidden] { display: none; }
 .pad-modes, .pad-toggles { display: flex; gap: 4px; flex-wrap: wrap; }
 
 /* 次の入力 */
@@ -181,6 +183,9 @@ body {
 }
 
 /* --- 設定画面（3ステップ） --- */
+.setup-head { display: flex; align-items: center; margin-bottom: 10px; }
+.setup-title { font-size: 15px; font-weight: 700; }
+.setup-head .ghost { margin-left: auto; }
 .steps { display: flex; gap: 6px; margin: 4px 0 14px; }
 .step {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;

@@ -47,7 +47,9 @@ function renderSetupPad({ setupStep, red, remaining, handCount }) {
 
 function renderPlayPad({ state, override, red, riichi, meldDraft, quickCall, notice, remaining }) {
   const next = describeNext(state.expect, override);
+  const auto = autoOverrideId(state.expect);
   const overrides = OVERRIDES
+    .filter((m) => m.id !== auto) // 自動送りと同じ対象は手動で選ぶ意味がない
     .map((m) => `<button class="chip sm${m.id === override ? ' is-active' : ''}" data-override="${m.id}">${m.label}</button>`)
     .join('');
 
@@ -60,7 +62,7 @@ function renderPlayPad({ state, override, red, riichi, meldDraft, quickCall, not
       <span class="next-label">${override ? '手動' : '次の入力'}</span>
       <strong class="next-target">${next}</strong>
       ${notice ? `<span class="notice">${notice}</span>` : ''}
-      <button class="toggle${riichi ? ' is-on' : ''}" data-toggle="riichi">リーチ</button>
+      ${isDiscardInput(state.expect, override) ? `<button class="toggle${riichi ? ' is-on' : ''}" data-toggle="riichi">リーチ</button>` : ''}
       <button class="toggle${red ? ' is-on' : ''}" data-toggle="red">赤</button>
       <button class="toggle" data-action="undo">取消</button>
     </div>
@@ -71,6 +73,19 @@ function renderPlayPad({ state, override, red, riichi, meldDraft, quickCall, not
     </details>
     ${renderGrid(red, remaining)}
   `;
+}
+
+/** いま自動送りが指している入力先を、手動指定のidに直す */
+function autoOverrideId(expect) {
+  if (expect.kind === 'draw') return 'draw';
+  return expect.seat === SEATS.SELF ? null : `discard${expect.seat}`;
+}
+
+/** 入力しようとしているのが捨て牌かどうか（リーチ宣言が意味を持つのはこのときだけ） */
+function isDiscardInput(expect, override) {
+  if (override === 'dora' || override === 'meld' || override === 'draw') return false;
+  if (override) return true; // discard1..3
+  return expect.kind === 'discard';
 }
 
 function describeNext(expect, override) {
