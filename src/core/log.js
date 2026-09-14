@@ -204,3 +204,19 @@ export function nextRoundLog(state, { renchan }) {
   }
   return initialLog({ ...base, jikaze: `${jikazeNum}z`, bakaze: `${bakazeNum}z`, kyoku });
 }
+
+/** この局をやり直す。場風・自風・局・本場・ルールは保ったまま入力だけ捨てる。 */
+export function restartRoundLog(state) {
+  return initialLog({
+    rules: state.rules,
+    bakaze: `${state.bakaze - 26}z`,
+    jikaze: `${state.jikaze - 26}z`,
+    kyoku: state.kyoku,
+    honba: state.honba,
+  });
+}
+
+/** 全部消して最初から。ルール設定は卓の設定なので引き継ぐ。 */
+export function resetAllLog(state) {
+  return initialLog({ rules: state.rules });
+}

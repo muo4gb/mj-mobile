@@ -201,10 +201,21 @@ body {
 }
 .empty { color: var(--muted); font-size: 12px; }
 
-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+dialog {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 12px; padding: 16px; min-width: min(300px, 88vw);
+}
 dialog::backdrop { background: #000a; }
+.dialog-title { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+.dialog-note { margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+.dialog-group { margin-bottom: 14px; }
+.dialog-label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .dialog-actions { display: grid; gap: 8px; }
-.dialog-actions .ghost { margin-left: 0; }
+.dialog-actions .ghost, .dialog-actions .primary { margin: 0; }
+.warn {
+  padding: 8px 16px; border-radius: 8px; border: 1px solid var(--lv4);
+  background: transparent; color: var(--lv4); font-weight: 700; font-size: 14px; cursor: pointer;
+}
 
 /* --- Mac など広い画面 --- */
 @media (min-width: 720px) {

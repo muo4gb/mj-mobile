@@ -4,7 +4,7 @@
 // 順番どおりでない入力は手動で入力先を指定する（1回で自動送りに戻る）。
 
 import { parseTile, tileToString, ALL_TILES } from './core/tiles.js';
-import { initialLog, replay, save, load, clear, nextRoundLog, SEATS } from './core/log.js';
+import { initialLog, replay, save, load, clear, nextRoundLog, restartRoundLog, resetAllLog, SEATS } from './core/log.js';
 import { analyze } from './core/suggest.js';
 import { yakuCandidates } from './core/yaku.js';
 import { renderHeader, renderAssist, renderOpponents, renderHand } from './ui/board.js';
@@ -30,6 +30,7 @@ const ui = {
   meldDraft: { kind: 'ankan' },
   quickCall: null,
   notice: null,
+  menuConfirm: null,
 };
 
 const isStarted = () => log.some((e) => e.type === 'start');
@@ -195,16 +196,75 @@ function applyQuickCall(kind, chi) {
   push({ type: 'call', seat, kind: chi ? 'chi' : kind, tiles, from: last.seat });
 }
 
-function nextRound(renchan) {
+/** 局を切り替える。入力中の状態も一緒に畳む。 */
+function startFresh(makeLog) {
   const state = replay(log);
   clear();
-  Object.assign(ui, { setupMode: 'haipai', override: null, riichi: false, quickCall: null });
-  commit(nextRoundLog(state, { renchan }));
+  Object.assign(ui, {
+    setupMode: 'haipai', override: null, riichi: false, quickCall: null, menuConfirm: null,
+  });
+  menu().close();
+  commit(makeLog(state));
+}
+
+// --- メニュー ---
+
+const menu = () => document.getElementById('menu-dialog');
+
+const CONFIRMS = {
+  restart: {
+    title: 'この局をやり直しますか？',
+    note: '配牌・ドラ・全員の捨て牌を消して設定画面に戻ります。場風・自風・局・本場・ルールはそのままです。',
+    yes: 'やり直す',
+    run: () => startFresh(restartRoundLog),
+  },
+  reset: {
+    title: '全部消して最初からにしますか？',
+    note: '東1局0本場の初期状態に戻ります。ルール設定（赤ドラ・喰いタン）は残します。',
+    yes: '最初から',
+    run: () => startFresh(resetAllLog),
+  },
+};
+
+function renderMenu() {
+  const body = document.getElementById('menu-body');
+  const confirm = CONFIRMS[ui.menuConfirm];
+  if (confirm) {
+    body.innerHTML = `
+      <p class="dialog-title">${confirm.title}</p>
+      <p class="dialog-note">${confirm.note}</p>
+      <div class="dialog-actions">
+        <button class="warn" data-action="confirm-yes">${confirm.yes}</button>
+        <button class="ghost" data-action="menu-back">やめる</button>
+      </div>`;
+    return;
+  }
+  body.innerHTML = `
+    <p class="dialog-title">メニュー</p>
+    <div class="dialog-group">
+      <span class="dialog-label">局の進行</span>
+      <div class="dialog-actions">
+        <button class="primary" data-action="renchan">親継続（本場+1）</button>
+        <button class="primary" data-action="tsugi">次局へ</button>
+      </div>
+    </div>
+    <div class="dialog-group">
+      <span class="dialog-label">リセット</span>
+      <div class="dialog-actions">
+        <button class="warn" data-action="ask-restart">この局をやり直す</button>
+        <button class="warn" data-action="ask-reset">全部消して最初から</button>
+      </div>
+    </div>
+    <div class="dialog-actions"><button class="ghost" data-action="close-menu">閉じる</button></div>`;
+}
+
+function openMenu(confirmKey = null) {
+  ui.menuConfirm = confirmKey;
+  renderMenu();
+  if (!menu().open) menu().showModal();
 }
 
 // --- イベント ---
-
-const DIALOG = () => document.getElementById('round-dialog');
 
 document.addEventListener('click', (ev) => {
   const t = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-setup-mode], [data-override], [data-toggle], [data-action], [data-call-seat], [data-call-kind], [data-call-chi], [data-meld-kind]');
@@ -249,10 +309,14 @@ document.addEventListener('click', (ev) => {
   switch (d.action) {
     case 'undo': return undo();
     case 'start': return push({ type: 'start' });
-    case 'next-round': return DIALOG().showModal();
-    case 'renchan': DIALOG().close(); return nextRound(true);
-    case 'tsugi': DIALOG().close(); return nextRound(false);
-    case 'cancel-round': return DIALOG().close();
+    case 'menu': return openMenu();
+    case 'close-menu': return menu().close();
+    case 'menu-back': return openMenu();
+    case 'ask-restart': return openMenu('restart');
+    case 'ask-reset': return openMenu('reset');
+    case 'confirm-yes': return CONFIRMS[ui.menuConfirm].run();
+    case 'renchan': return startFresh((st) => nextRoundLog(st, { renchan: true }));
+    case 'tsugi': return startFresh((st) => nextRoundLog(st, { renchan: false }));
     default: return undefined;
   }
 });

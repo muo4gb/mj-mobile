@@ -21,7 +21,7 @@ export function renderHeader(state) {
       <strong>${bakaze}${state.kyoku}局 ${state.honba}本場</strong>
       <span class="tag">自風 ${jikaze}${isDealer ? '（親）' : ''}</span>
       <span class="tag">${state.turn}巡目</span>
-      <button class="ghost" data-action="next-round">次の局へ</button>
+      <button class="ghost" data-action="menu">メニュー</button>
     </div>
     <div class="head-line">
       <span class="tag">表示牌 ${indicators || '—'}</span>
