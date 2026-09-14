@@ -8,10 +8,11 @@ import { ALL_TILES, suitOf, numberOf, indexOf, tileToString, tileName, parseTile
 import { SEAT_NAMES, SEATS } from '../core/log.js';
 import { tileSvg } from './tile-svg.js';
 
+// 索子を上、萬子を下に置く（親指の届きやすさ優先）
 const ROWS = [
-  { suit: 'm', label: '萬' },
-  { suit: 'p', label: '筒' },
   { suit: 's', label: '索' },
+  { suit: 'p', label: '筒' },
+  { suit: 'm', label: '萬' },
   { suit: 'z', label: '字' },
 ];
 
