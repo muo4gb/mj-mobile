@@ -29,18 +29,17 @@ export function renderPad(ctx) {
   return ctx.setup ? renderSetupPad(ctx) : renderPlayPad(ctx);
 }
 
-function renderSetupPad({ setupMode, red, remaining }) {
-  const modes = [
-    { id: 'haipai', label: '配牌' },
-    { id: 'dora', label: 'ドラ表示牌' },
-  ]
-    .map((m) => `<button class="mode${m.id === setupMode ? ' is-active' : ''}" data-setup-mode="${m.id}">${m.label}</button>`)
-    .join('');
+function renderSetupPad({ setupStep, red, remaining, handCount }) {
+  // ①局の設定では牌を使わないのでパッドごと隠す
+  if (setupStep === 1) return '';
+
+  const isDora = setupStep === 2;
   return `
-    <div class="pad-modes">${modes}</div>
-    <div class="pad-toggles">
+    <div class="pad-next">
+      <span class="next-label">${isDora ? 'ステップ2' : 'ステップ3'}</span>
+      <strong class="next-target">${isDora ? 'ドラ表示牌を選ぶ' : '配牌を入力'}</strong>
       <button class="toggle${red ? ' is-on' : ''}" data-toggle="red">赤</button>
-      <button class="toggle" data-action="undo">取消</button>
+      ${isDora || handCount === 0 ? '' : '<button class="toggle" data-action="undo-haipai">1枚戻す</button>'}
     </div>
     ${renderGrid(red, remaining)}
   `;

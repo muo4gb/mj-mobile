@@ -3,7 +3,7 @@
 // 対局中は「次の入力」（state.expect）に向かって牌をタップするだけで進む。
 // 順番どおりでない入力は手動で入力先を指定する（1回で自動送りに戻る）。
 
-import { parseTile, tileToString, ALL_TILES } from './core/tiles.js';
+import { parseTile, tileToString, doraFromIndicator, ALL_TILES } from './core/tiles.js';
 import { initialLog, replay, save, load, clear, nextRoundLog, restartRoundLog, resetAllLog, SEATS } from './core/log.js';
 import { analyze } from './core/suggest.js';
 import { yakuCandidates } from './core/yaku.js';
@@ -23,7 +23,7 @@ const el = {
 
 let log = load() ?? initialLog();
 const ui = {
-  setupMode: 'haipai',
+  setupStep: 1,
   override: null,
   red: false,
   riichi: false,
@@ -70,54 +70,133 @@ function render() {
     ...ui,
     state,
     setup: !started,
+    handCount: log[0].hand.length,
     remaining: ALL_TILES.map((i) => 4 - state.visible[i]),
   });
   ui.notice = null;
 }
 
 // --- 局開始時の設定（4.1） ---
+//
+// 局の切れ目にしか使わないので、1画面に詰め込まず3ステップに分ける。
+// 「次の局へ」で来たときは①が埋まっているので、確認して進むだけで済む。
+
+const STEPS = [
+  { id: 1, label: '局' },
+  { id: 2, label: 'ドラ' },
+  { id: 3, label: '配牌' },
+];
+
+const WINDS = [
+  { value: '1z', label: '東' },
+  { value: '2z', label: '南' },
+  { value: '3z', label: '西' },
+  { value: '4z', label: '北' },
+];
+
+/** 中断した続きから始められるよう、入力済みの内容からステップを決める */
+function initialSetupStep() {
+  const init = log[0];
+  if (init.hand.length > 0 || init.doraIndicator) return 3;
+  return 1;
+}
+
+const choice = (group, options, current, attr = 'data-set') => `
+  <div class="choice-row" data-group="${group}">
+    ${options.map((o) => `<button class="choice${String(o.value) === String(current) ? ' is-active' : ''}"
+      ${attr}="${group}" data-value="${o.value}">${o.label}</button>`).join('')}
+  </div>`;
 
 function renderSetup(state) {
   const init = log[0];
-  const handTiles = init.hand
+  const need = state.dealer === SEATS.SELF ? 14 : 13;
+  const step = ui.setupStep;
+
+  const tabs = STEPS.map((st) => `
+    <button class="step${st.id === step ? ' is-active' : ''}${st.id < step ? ' is-done' : ''}" data-step="${st.id}">
+      <span class="step-no">${st.id}</span>${st.label}
+    </button>`).join('');
+
+  el.setup.innerHTML = `<div class="steps">${tabs}</div>${[renderStepRound, renderStepDora, renderStepHaipai][step - 1](init, state, need)}`;
+}
+
+function renderStepRound(init, state) {
+  const bakaze = WINDS.find((w) => w.value === init.bakaze).label;
+  const jikaze = WINDS.find((w) => w.value === init.jikaze).label;
+  const isDealer = state.dealer === SEATS.SELF;
+
+  return `
+    <p class="setup-lead">この局の設定を確認してください</p>
+    <div class="big-summary">
+      <strong>${bakaze}${init.kyoku}局 ${init.honba}本場</strong>
+      <span>自風 ${jikaze}${isDealer ? '（親）' : '（子）'}</span>
+    </div>
+    <div class="field"><span class="field-label">自風</span>${choice('jikaze', WINDS, init.jikaze)}</div>
+    <div class="field"><span class="field-label">場風</span>${choice('bakaze', WINDS, init.bakaze)}</div>
+    <div class="field"><span class="field-label">局</span>${choice('kyoku', [1, 2, 3, 4].map((n) => ({ value: n, label: `${n}局` })), init.kyoku)}</div>
+    <div class="field">
+      <span class="field-label">本場</span>
+      <div class="stepper" data-group="honba">
+        <button class="choice" data-set="honba" data-value="${Math.max(0, init.honba - 1)}">−</button>
+        <span class="stepper-value">${init.honba}</span>
+        <button class="choice" data-set="honba" data-value="${init.honba + 1}">＋</button>
+      </div>
+    </div>
+    <hr class="setup-hr">
+    <div class="field"><span class="field-label">赤ドラ</span>${choice('aka', [0, 3, 4].map((n) => ({ value: n, label: `${n}枚` })), init.rules.aka, 'data-set-rule')}</div>
+    <div class="field"><span class="field-label">喰いタン</span>${choice('kuitan', [{ value: 1, label: 'あり' }, { value: 0, label: 'なし' }], init.rules.kuitan ? 1 : 0, 'data-set-rule')}</div>
+    <div class="setup-nav">
+      <span></span>
+      <button class="primary" data-step="2">次へ：ドラ表示牌</button>
+    </div>`;
+}
+
+function renderStepDora(init) {
+  const chosen = init.doraIndicator ? parseTile(init.doraIndicator) : null;
+  const preview = chosen
+    ? `<span class="dora-cell"><span class="dora-cap">表示牌</span>${tileSvg(chosen.index, { red: chosen.red })}</span>
+       <span class="dora-arrow">→</span>
+       <span class="dora-cell"><span class="dora-cap">ドラ</span>${tileSvg(doraFromIndicator(chosen.index))}</span>`
+    : '<span class="empty">下のパッドから選んでください</span>';
+
+  return `
+    <p class="setup-lead">ドラ表示牌を選んでください</p>
+    <div class="dora-preview">${preview}</div>
+    <div class="setup-nav">
+      <button class="ghost" data-step="1">戻る</button>
+      <button class="primary" data-step="3"${init.doraIndicator ? '' : ' disabled'}>次へ：配牌</button>
+    </div>`;
+}
+
+function renderStepHaipai(init, state, need) {
+  const left = need - init.hand.length;
+  // ステップタブで飛んできた場合、ドラが未選択のことがある
+  const ready = left === 0 && Boolean(init.doraIndicator);
+  // 手牌と見比べやすいよう並べて出す（ログ上の順番は入力順のままでよい）
+  const tiles = [...init.hand]
+    .sort((a, b) => {
+      const pa = parseTile(a);
+      const pb = parseTile(b);
+      return pa.index - pb.index || Number(pa.red) - Number(pb.red);
+    })
     .map((t) => {
       const { index, red } = parseTile(t);
       return `<button class="hand-tile" data-remove="${t}">${tileSvg(index, { red })}</button>`;
     })
     .join('');
-  const need = state.dealer === SEATS.SELF ? 14 : 13;
-  const windOptions = (selected) => ['東', '南', '西', '北']
-    .map((w, i) => `<option value="${i + 1}z"${selected === `${i + 1}z` ? ' selected' : ''}>${w}</option>`)
-    .join('');
 
-  el.setup.innerHTML = `
-    <h1>局の設定</h1>
-    <div class="setup-row">
-      <label>場風 <select data-init="bakaze">${windOptions(init.bakaze)}</select></label>
-      <label>自風 <select data-init="jikaze">${windOptions(init.jikaze)}</select></label>
-      <label>局 <input type="number" min="1" max="4" value="${init.kyoku}" data-init="kyoku"></label>
-      <label>本場 <input type="number" min="0" value="${init.honba}" data-init="honba"></label>
+  return `
+    <p class="setup-lead">配牌を入力してください${state.dealer === SEATS.SELF ? '（親なので14枚）' : ''}</p>
+    <div class="haipai-progress">
+      <strong>${init.hand.length}</strong><span class="of">/ ${need}</span>
+      <span class="left-label">${left > 0 ? `あと${left}枚` : '入力できました'}</span>
     </div>
-    <div class="setup-row">
-      <label>赤ドラ
-        <select data-rule="aka">
-          ${[0, 3, 4].map((n) => `<option value="${n}"${init.rules.aka === n ? ' selected' : ''}>${n}枚</option>`).join('')}
-        </select>
-      </label>
-      <label>喰いタン
-        <select data-rule="kuitan">
-          <option value="1"${init.rules.kuitan ? ' selected' : ''}>あり</option>
-          <option value="0"${!init.rules.kuitan ? ' selected' : ''}>なし</option>
-        </select>
-      </label>
-    </div>
-    <div class="setup-row">
-      <span class="tag">ドラ表示牌 ${init.doraIndicator ? tileSvg(parseTile(init.doraIndicator).index, { red: parseTile(init.doraIndicator).red }) : '未入力'}</span>
-      <span class="tag">配牌 ${init.hand.length} / ${need}</span>
-    </div>
-    <div class="hand">${handTiles || '<span class="empty">下のパッドから配牌を入力（牌をタップで削除）</span>'}</div>
-    <button class="primary" data-action="start"${init.hand.length === need && init.doraIndicator ? '' : ' disabled'}>開始</button>
-  `;
+    <div class="hand">${tiles || '<span class="empty">下のパッドからタップして入力。入れた牌をタップすると消せます</span>'}</div>
+    ${init.doraIndicator ? '' : '<p class="setup-warn">ドラ表示牌が未選択です</p>'}
+    <div class="setup-nav">
+      <button class="ghost" data-step="2">戻る</button>
+      <button class="primary" data-action="start"${ready ? '' : ' disabled'}>開始</button>
+    </div>`;
 }
 
 const editInit = (patch) => {
@@ -129,8 +208,12 @@ const editInit = (patch) => {
 
 function onPadTile(tileStr) {
   if (!isStarted()) {
-    if (ui.setupMode === 'dora') editInit({ doraIndicator: tileStr });
-    else editInit({ hand: [...log[0].hand, tileStr] });
+    if (ui.setupStep === 2) {
+      ui.setupStep = 3; // ドラを選んだら配牌へ進む
+      editInit({ doraIndicator: tileStr });
+    } else if (ui.setupStep === 3) {
+      editInit({ hand: [...log[0].hand, tileStr] });
+    }
     return;
   }
 
@@ -201,7 +284,7 @@ function startFresh(makeLog) {
   const state = replay(log);
   clear();
   Object.assign(ui, {
-    setupMode: 'haipai', override: null, riichi: false, quickCall: null, menuConfirm: null,
+    setupStep: 1, override: null, riichi: false, quickCall: null, menuConfirm: null,
   });
   menu().close();
   commit(makeLog(state));
@@ -267,7 +350,7 @@ function openMenu(confirmKey = null) {
 // --- イベント ---
 
 document.addEventListener('click', (ev) => {
-  const t = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-setup-mode], [data-override], [data-toggle], [data-action], [data-call-seat], [data-call-kind], [data-call-chi], [data-meld-kind]');
+  const t = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-step], [data-set], [data-set-rule], [data-override], [data-toggle], [data-action], [data-call-seat], [data-call-kind], [data-call-chi], [data-meld-kind]');
   if (!t) return;
   const d = t.dataset;
 
@@ -282,9 +365,18 @@ document.addEventListener('click', (ev) => {
     if (at >= 0) hand.splice(at, 1);
     return editInit({ hand });
   }
-  if (d.setupMode) {
-    ui.setupMode = d.setupMode;
+  if (d.step) {
+    ui.setupStep = Number(d.step);
     return render();
+  }
+  if (d.set) {
+    const value = ['kyoku', 'honba'].includes(d.set) ? Number(d.value) : d.value;
+    return editInit({ [d.set]: value });
+  }
+  if (d.setRule) {
+    const rules = { ...log[0].rules };
+    rules[d.setRule] = d.setRule === 'kuitan' ? d.value === '1' : Number(d.value);
+    return editInit({ rules });
   }
   if (d.override) {
     ui.override = ui.override === d.override ? null : d.override;
@@ -308,6 +400,10 @@ document.addEventListener('click', (ev) => {
 
   switch (d.action) {
     case 'undo': return undo();
+    case 'undo-haipai': {
+      const hand = log[0].hand.slice(0, -1);
+      return editInit({ hand });
+    }
     case 'start': return push({ type: 'start' });
     case 'menu': return openMenu();
     case 'close-menu': return menu().close();
@@ -321,16 +417,5 @@ document.addEventListener('click', (ev) => {
   }
 });
 
-document.addEventListener('change', (ev) => {
-  const d = ev.target.dataset;
-  if (d.init) {
-    editInit({ [d.init]: ev.target.type === 'number' ? Number(ev.target.value) : ev.target.value });
-  }
-  if (d.rule) {
-    const rules = { ...log[0].rules };
-    rules[d.rule] = d.rule === 'kuitan' ? ev.target.value === '1' : Number(ev.target.value);
-    editInit({ rules });
-  }
-});
-
+ui.setupStep = initialSetupStep();
 render();
