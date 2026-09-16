@@ -152,6 +152,12 @@ function computeVisible(state) {
   return visible;
 }
 
+/** 直前に捨てられた牌（誰も鳴いていない状態なら state.callable が真） */
+export function lastDiscard(state) {
+  const all = state.discardSeq;
+  return all.length ? all[all.length - 1] : null;
+}
+
 /** 残り枚数（自分から見て、まだどこにあるか分からない枚数） */
 export const remainingOf = (state, index) => 4 - state.visible[index];
 

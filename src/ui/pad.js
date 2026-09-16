@@ -4,16 +4,10 @@
 // 通常は「次の入力」に向かって牌をタップするだけで進み、モード切替は要らない。
 // 順番どおりでない入力が必要なときだけ、手動で入力先を指定する。
 
-import { ALL_TILES, suitOf, numberOf, indexOf, tileToString, tileName, parseTile } from '../core/tiles.js';
-import { SEAT_NAMES, SEATS } from '../core/log.js';
+import { ALL_TILES, SUIT_DISPLAY, suitOf, numberOf, indexOf, tileToString, tileName } from '../core/tiles.js';
+import { SEAT_NAMES, SEATS, lastDiscard } from '../core/log.js';
+import { chiShapes } from '../core/call.js';
 import { tileSvg } from './tile-svg.js';
-
-const ROWS = [
-  { suit: 'm', label: '萬' },
-  { suit: 's', label: '索' },
-  { suit: 'p', label: '筒' },
-  { suit: 'z', label: '字' },
-];
 
 /** 手動で入力先を指定するときの選択肢（1回入力すると自動送りに戻る） */
 export const OVERRIDES = [
@@ -46,7 +40,7 @@ function renderSetupPad({ setupStep, red, remaining, handCount }) {
 }
 
 function renderPlayPad({ state, override, red, riichi, meldDraft, quickCall, notice, remaining }) {
-  const next = describeNext(state.expect, override);
+  const target = resolveTarget(state.expect, override);
   const auto = autoOverrideId(state.expect);
   const overrides = OVERRIDES
     .filter((m) => m.id !== auto) // 自動送りと同じ対象は手動で選ぶ意味がない
@@ -58,13 +52,14 @@ function renderPlayPad({ state, override, red, riichi, meldDraft, quickCall, not
     : renderQuickCall(state, quickCall);
 
   return `
-    <div class="pad-next${override ? ' is-manual' : ''}">
-      <span class="next-label">${override ? '手動' : '次の入力'}</span>
-      <strong class="next-target">${next}</strong>
-      ${notice ? `<span class="notice">${notice}</span>` : ''}
-      ${isDiscardInput(state.expect, override) ? `<button class="toggle${riichi ? ' is-on' : ''}" data-toggle="riichi">リーチ</button>` : ''}
-      <button class="toggle${red ? ' is-on' : ''}" data-toggle="red">赤</button>
-      <button class="toggle" data-action="undo">取消</button>
+    <div class="pad-next${override ? ' is-manual' : ''}${target.seat === null ? ' is-seatless' : ` seat-${target.seat}`}">
+      ${renderSeatStrip(target)}
+      <div class="pad-tools">
+        ${notice ? `<span class="notice">${notice}</span>` : ''}
+        ${isDiscardInput(state.expect, override) ? `<button class="toggle${riichi ? ' is-on' : ''}" data-toggle="riichi">リーチ</button>` : ''}
+        <button class="toggle${red ? ' is-on' : ''}" data-toggle="red">赤</button>
+        <button class="toggle" data-action="undo">取消</button>
+      </div>
     </div>
     ${middle}
     <details class="pad-manual"${override ? ' open' : ''}>
@@ -88,13 +83,30 @@ function isDiscardInput(expect, override) {
   return expect.kind === 'discard';
 }
 
-function describeNext(expect, override) {
-  if (override === 'meld') return '暗槓・加槓の牌';
-  if (override === 'dora') return '槓ドラ表示牌';
-  if (override === 'draw') return '自分のツモ';
-  if (override && override.startsWith('discard')) return `${SEAT_NAMES[Number(override.slice(-1))]} の捨て牌`;
-  if (expect.kind === 'draw') return '自分のツモ';
-  return expect.seat === SEATS.SELF ? '自分の打牌' : `${SEAT_NAMES[expect.seat]} の捨て牌`;
+/** いま入力しようとしているもの。席が絡まない入力（槓ドラなど）は seat を null にする。 */
+function resolveTarget(expect, override) {
+  if (override === 'meld') return { seat: SEATS.SELF, what: '暗槓・加槓', manual: true };
+  if (override === 'dora') return { seat: null, what: '槓ドラ表示牌', manual: true };
+  if (override === 'draw') return { seat: SEATS.SELF, what: 'ツモ', manual: true };
+  if (override) return { seat: Number(override.slice(-1)), what: '捨て牌', manual: true };
+  if (expect.kind === 'draw') return { seat: SEATS.SELF, what: 'ツモ' };
+  return { seat: expect.seat, what: expect.seat === SEATS.SELF ? '打牌' : '捨て牌' };
+}
+
+/** 打順の4コマ。今どこかを席の色で示す。巡目のどのあたりかも一目で分かる。 */
+const TURN_ORDER = [SEATS.SELF, SEATS.SHIMOCHA, SEATS.TOIMEN, SEATS.KAMICHA];
+
+function renderSeatStrip(target) {
+  if (target.seat === null) {
+    return `<div class="seat-strip"><span class="seat-cell is-active is-seatless">
+      <b>${target.what}</b><small>${target.manual ? '手動' : ''}</small></span></div>`;
+  }
+  const cells = TURN_ORDER.map((seat) => {
+    const active = seat === target.seat;
+    return `<span class="seat-cell seat-${seat}${active ? ' is-active' : ''}">
+      <b>${SEAT_NAMES[seat]}</b><small>${active ? target.what : ''}</small></span>`;
+  }).join('<i class="seat-arrow">›</i>');
+  return `<div class="seat-strip">${cells}</div>`;
 }
 
 /**
@@ -107,11 +119,11 @@ function renderQuickCall(state, quickCall) {
   const label = tileName(last.index);
 
   if (!quickCall) {
-    const seats = [0, 1, 2, 3]
+    const seats = [SEATS.SHIMOCHA, SEATS.TOIMEN, SEATS.KAMICHA]
       .filter((s) => s !== last.seat)
       .map((s) => `<button class="chip sm" data-call-seat="${s}">${SEAT_NAMES[s]}</button>`)
       .join('');
-    return `<div class="quick-call"><span class="qc-label">${label} を鳴き</span>${seats}</div>`;
+    return `<div class="quick-call"><span class="qc-label">${label} を他家が鳴き</span>${seats}</div>`;
   }
 
   const chips = [`<button class="chip" data-call-kind="pon">ポン</button>`];
@@ -123,22 +135,6 @@ function renderQuickCall(state, quickCall) {
   }
   chips.push('<button class="chip sm" data-call-seat="cancel">やめる</button>');
   return `<div class="quick-call"><span class="qc-label">${SEAT_NAMES[quickCall.seat]} が ${label} を</span>${chips.join('')}</div>`;
-}
-
-function lastDiscard(state) {
-  const all = state.discardSeq;
-  return all.length ? all[all.length - 1] : null;
-}
-
-/** 手から出す2枚の組み合わせ（チーは上家の捨て牌にしかできない） */
-function chiShapes(index) {
-  if (index >= 27) return [];
-  const suit = suitOf(index);
-  const n = numberOf(index);
-  const candidates = [[n - 2, n - 1], [n - 1, n + 1], [n + 1, n + 2]];
-  return candidates
-    .filter(([a, b]) => a >= 1 && a <= 9 && b >= 1 && b <= 9)
-    .map(([a, b]) => [indexOf(suit, a), indexOf(suit, b)]);
 }
 
 function renderMeldBar(draft) {
@@ -153,7 +149,7 @@ function renderMeldBar(draft) {
 }
 
 function renderGrid(red, remaining) {
-  const rows = ROWS.map((row) => {
+  const rows = SUIT_DISPLAY.map((row) => {
     const cells = ALL_TILES.filter((i) => suitOf(i) === row.suit)
       .map((i) => {
         const left = remaining[i];
@@ -166,5 +162,3 @@ function renderGrid(red, remaining) {
   }).join('');
   return `<div class="pad-grid">${rows}</div>`;
 }
-
-export { lastDiscard, chiShapes };

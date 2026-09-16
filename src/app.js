@@ -3,12 +3,13 @@
 // 対局中は「次の入力」（state.expect）に向かって牌をタップするだけで進む。
 // 順番どおりでない入力は手動で入力先を指定する（1回で自動送りに戻る）。
 
-import { parseTile, tileToString, doraFromIndicator, ALL_TILES } from './core/tiles.js';
-import { initialLog, replay, save, load, clear, nextRoundLog, restartRoundLog, resetAllLog, SEATS } from './core/log.js';
+import { parseTile, tileToString, compareTiles, doraFromIndicator, ALL_TILES } from './core/tiles.js';
+import { initialLog, replay, save, load, clear, nextRoundLog, restartRoundLog, resetAllLog, lastDiscard, SEATS } from './core/log.js';
 import { analyze } from './core/suggest.js';
 import { yakuCandidates } from './core/yaku.js';
-import { renderHeader, renderAssist, renderOpponents, renderHand } from './ui/board.js';
-import { renderPad, lastDiscard } from './ui/pad.js';
+import { selfCallOptions, pickFromHand } from './core/call.js';
+import { renderHeader, renderAssist, renderCallAssist, renderOpponents, renderHand } from './ui/board.js';
+import { renderPad } from './ui/pad.js';
 import { tileSvg } from './ui/tile-svg.js';
 
 const el = {
@@ -31,6 +32,7 @@ const ui = {
   quickCall: null,
   notice: null,
   menuConfirm: null,
+  skippedCallSeq: null,
 };
 
 const isStarted = () => log.some((e) => e.type === 'start');
@@ -38,6 +40,8 @@ const isStarted = () => log.some((e) => e.type === 'start');
 function commit(next) {
   log = next;
   save(log);
+  // 入力が変われば状況も変わるので、鳴きの見送りは引き継がない
+  ui.skippedCallSeq = null;
   render();
 }
 
@@ -58,8 +62,10 @@ function render() {
   if (started) {
     el.setup.innerHTML = '';
     const analysis = analyze(state);
+    const call = currentCall(state);
+    const canDiscard = !ui.override && state.expect.kind === 'discard' && state.expect.seat === SEATS.SELF;
     el.header.innerHTML = renderHeader(state);
-    el.assist.innerHTML = renderAssist(state, analysis, yakuCandidates(state));
+    el.assist.innerHTML = renderCallAssist(call) + renderAssist(state, analysis, yakuCandidates(state), { canDiscard });
     el.opponents.innerHTML = renderOpponents(state);
     el.hand.innerHTML = renderHand(state, analysis);
   } else {
@@ -182,11 +188,7 @@ function renderStepHaipai(init, state, need) {
   const ready = left === 0 && Boolean(init.doraIndicator);
   // 手牌と見比べやすいよう並べて出す（ログ上の順番は入力順のままでよい）
   const tiles = [...init.hand]
-    .sort((a, b) => {
-      const pa = parseTile(a);
-      const pb = parseTile(b);
-      return pa.index - pb.index || Number(pa.red) - Number(pb.red);
-    })
+    .sort(compareTiles)
     .map((t) => {
       const { index, red } = parseTile(t);
       return `<button class="hand-tile" data-remove="${t}">${tileSvg(index, { red })}</button>`;
@@ -265,6 +267,28 @@ function pushSelfKan(state, tileStr) {
   const kind = ui.meldDraft.kind;
   const tiles = kind === 'kakan' ? [tileStr] : [tileStr, tileStr, tileStr, tileStr];
   push({ type: 'call', seat: SEATS.SELF, kind, tiles, from: null });
+}
+
+/** 見送った鳴きは、その捨て牌が変わるまで出さない */
+function currentCall(state) {
+  const call = selfCallOptions(state);
+  if (!call || call.seq === ui.skippedCallSeq) return null;
+  return call;
+}
+
+/** アシストから自分の鳴きを記録する */
+function applySelfCall(key) {
+  const state = replay(log);
+  const call = selfCallOptions(state);
+  if (!call) return;
+  if (key === 'ron') {
+    ui.skippedCallSeq = call.seq; // 和了は記録しない。局の進行はメニューから
+    return render();
+  }
+  const opt = call.options[Number(key)];
+  if (!opt) return;
+  ui.quickCall = null;
+  push({ type: 'call', seat: SEATS.SELF, kind: opt.kind, tiles: opt.tiles, from: call.from });
 }
 
 /** 直前の捨て牌への鳴き */
@@ -361,7 +385,7 @@ function openMenu(confirmKey = null) {
 // --- イベント ---
 
 document.addEventListener('click', (ev) => {
-  const t = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-step], [data-set], [data-set-rule], [data-override], [data-toggle], [data-action], [data-call-seat], [data-call-kind], [data-call-chi], [data-meld-kind]');
+  const t = ev.target.closest('[data-tile], [data-discard], [data-remove], [data-step], [data-set], [data-set-rule], [data-override], [data-self-call], [data-toggle], [data-action], [data-call-seat], [data-call-kind], [data-call-chi], [data-meld-kind]');
   if (!t) return;
   const d = t.dataset;
 
@@ -398,6 +422,7 @@ document.addEventListener('click', (ev) => {
     ui.quickCall = d.callSeat === 'cancel' ? null : { seat: Number(d.callSeat) };
     return render();
   }
+  if (d.selfCall) return applySelfCall(d.selfCall);
   if (d.callKind) return applyQuickCall(d.callKind, null);
   if (d.callChi) return applyQuickCall('chi', d.callChi.split(',').map(Number));
   if (d.meldKind) {
@@ -410,6 +435,10 @@ document.addEventListener('click', (ev) => {
   }
 
   switch (d.action) {
+    case 'skip-call': {
+      ui.skippedCallSeq = lastDiscard(replay(log))?.seq ?? null;
+      return render();
+    }
     case 'undo': return undo();
     case 'undo-haipai': {
       const hand = log[0].hand.slice(0, -1);

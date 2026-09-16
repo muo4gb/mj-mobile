@@ -63,6 +63,27 @@ export function tileName(index) {
   return `${numberOf(index)}${suit === 'p' ? '筒' : '索'}`;
 }
 
+/**
+ * 画面に並べるときの順番。入力パッドの行順と手牌の並びはこれで揃える。
+ */
+export const SUIT_DISPLAY = [
+  { suit: 'm', label: '萬' },
+  { suit: 's', label: '索' },
+  { suit: 'p', label: '筒' },
+  { suit: 'z', label: '字' },
+];
+
+const DISPLAY_RANK = Object.fromEntries(SUIT_DISPLAY.map((r, i) => [r.suit, i]));
+
+export const displayOrderOf = (index) => DISPLAY_RANK[suitOf(index)] * 10 + numberOf(index);
+
+/** 牌表記どうしの比較。赤は同じ数字の後ろに置く。 */
+export function compareTiles(a, b) {
+  const pa = parseTile(a);
+  const pb = parseTile(b);
+  return displayOrderOf(pa.index) - displayOrderOf(pb.index) || Number(pa.red) - Number(pb.red);
+}
+
 export const emptyCounts = () => new Array(TILE_KINDS).fill(0);
 
 /** 牌表記の配列 → counts[34] */

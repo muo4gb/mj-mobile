@@ -1,6 +1,6 @@
 // 画面上部（ヘッダー・アシスト・他家・手牌）の描画
 
-import { tileName, parseTile, HONOR_NAMES } from '../core/tiles.js';
+import { tileName, parseTile, compareTiles, HONOR_NAMES } from '../core/tiles.js';
 import { SEAT_NAMES, SEATS } from '../core/log.js';
 import { LEVEL_LABELS, warningsFor, safetyOf } from '../core/safety.js';
 import { UNSUPPORTED_NOTE } from '../core/yaku.js';
@@ -31,20 +31,52 @@ export function renderHeader(state) {
   `;
 }
 
-export function renderAssist(state, analysis, yaku) {
+/** 自分が鳴ける／和了れるときの案内 */
+export function renderCallAssist(call) {
+  if (!call) return '';
+  const tile = `<span class="mini">${tileSvg(call.index, { red: call.red })}</span>`;
+  const seat = `<span class="seat-tag seat-${call.from}">${SEAT_NAMES[call.from]}</span>`;
+
+  const ron = call.ron
+    ? '<button class="call-opt is-ron" data-self-call="ron">ロン<small>和了形です</small></button>'
+    : '';
+
+  const opts = call.options.map((o, i) => {
+    const sh = o.shanten < 0 ? '和了' : o.shanten === 0 ? 'テンパイ' : `${o.shanten}向聴`;
+    const yaku = o.yaku.length ? o.yaku.map((y) => y.name).join('・') : '役候補なし';
+    return `<button class="call-opt${o.yakuhai ? ' is-yakuhai' : ''}" data-self-call="${i}">
+      ${o.label}<small>${sh} / ${yaku}</small></button>`;
+  }).join('');
+
+  return `
+    <div class="call-assist${call.ron ? ' is-ron' : ''}">
+      <div class="ca-head">${seat}の${tile}は${call.ron ? '和了れます' : '鳴けます'}</div>
+      <div class="ca-options">${ron}${opts}
+        <button class="call-opt is-skip" data-action="skip-call">見送る</button>
+      </div>
+      ${call.ron ? '<p class="ca-note">役なし・フリテンまでは見ていません</p>' : ''}
+    </div>`;
+}
+
+export function renderAssist(state, analysis, yaku, { canDiscard = false } = {}) {
   if (!analysis.recommended) {
     return '<p class="empty">手牌を入力してください</p>';
   }
   const { recommended, safest, sameChoice, shanten } = analysis;
 
-  const card = (title, r, extra) => `
-    <div class="suggest-card">
+  const card = (title, r, extra) => {
+    const tag = canDiscard ? 'button' : 'div';
+    const action = canDiscard ? ` data-discard="${r.handTile}"` : '';
+    return `
+    <${tag} class="suggest-card${canDiscard ? ' is-tappable' : ''}"${action}>
       <span class="card-title">${title}</span>
-      <span class="card-tile">${tileSvg(r.index, { red: r.tile.startsWith('0') })}</span>
+      <span class="card-tile">${tileSvg(r.index, { red: r.handTile.startsWith('0') })}</span>
       <span class="card-name">${tileName(r.index)}</span>
       <span class="lv lv${r.safety.level}">${LEVEL_LABELS[r.safety.level]}</span>
       <span class="card-extra">${extra(r)}</span>
-    </div>`;
+      ${canDiscard ? '<span class="card-tap">タップで打牌</span>' : ''}
+    </${tag}>`;
+  };
 
   const cards = sameChoice
     ? card('推奨＝最安全', recommended, (r) => `受け入れ ${r.ukeire}枚`)
@@ -78,7 +110,7 @@ export function renderOpponents(state) {
       .join('');
     const riichi = state.riichiSeq[seat] !== null;
     return `
-      <details class="opp${riichi ? ' is-riichi' : ''}">
+      <details class="opp seat-${seat}${riichi ? ' is-riichi' : ''}">
         <summary>
           <span class="opp-name">${SEAT_NAMES[seat]}</span>
           ${flags || '<span class="flag flag-none">情報なし</span>'}
@@ -95,11 +127,7 @@ export function renderOpponents(state) {
 
 export function renderHand(state, analysis) {
   const byIndex = new Map(analysis.results.map((r) => [r.index, r]));
-  const sorted = [...state.hand].sort((a, b) => {
-    const pa = parseTile(a);
-    const pb = parseTile(b);
-    return pa.index - pb.index || Number(pa.red) - Number(pb.red);
-  });
+  const sorted = [...state.hand].sort(compareTiles); // 入力パッドと同じ並び
 
   const tiles = sorted.map((t) => {
     const { index, red } = parseTile(t);

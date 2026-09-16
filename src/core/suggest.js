@@ -12,6 +12,14 @@ function redCountOf(state, index) {
   }).length;
 }
 
+/** 実際に手牌にある表記を返す。赤は残したいので通常牌を優先する。 */
+function handTileFor(state, index) {
+  const plain = tileToString(index);
+  if (state.hand.includes(plain)) return plain;
+  const red = tileToString(index, true);
+  return state.hand.includes(red) ? red : plain;
+}
+
 /** 孤立牌か（前後2枚以内に仲間がいない数牌、または1枚しかない字牌） */
 function isIsolated(counts, index) {
   if (counts[index] >= 2) return false;
@@ -46,7 +54,7 @@ export function evaluateDiscards(state) {
     const reds = redCountOf(state, i);
     results.push({
       index: i,
-      tile: tileToString(i, reds > 0 && counts[i] === reds),
+      handTile: handTileFor(state, i),
       shantenAfter: after,
       ukeire: uk.total,
       ukeireTiles: uk.tiles,
