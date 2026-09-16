@@ -8,8 +8,12 @@
   --accent: #5aa9e6;
 
   --tile-face: #f4f1e8;
-  --tile-ink: #222;
   --tile-red: #c0392b;
+  /* 牌種ごとに色を変えて、ひと目で種類が分かるようにする */
+  --ink-m: #23262b;
+  --ink-s: #1f7a43;
+  --ink-p: #1d5c94;
+  --ink-z: #23262b;
 
   /* 安全度5段階（4.5.1） */
   --lv1: #2e9e5b;
@@ -161,7 +165,7 @@ body {
 .t-num { font: 700 22px/1 system-ui, sans-serif; text-anchor: middle; }
 .t-suit { font: 600 13px/1 system-ui, sans-serif; text-anchor: middle; }
 .t-honor { font: 700 26px/1 system-ui, sans-serif; text-anchor: middle; }
-.mini { display: inline-block; width: 20px; vertical-align: middle; }
+.mini { display: inline-block; width: 22px; vertical-align: middle; }
 .mini.is-riichi { transform: rotate(90deg); }
 .mini.is-indicator { opacity: .85; }
 
