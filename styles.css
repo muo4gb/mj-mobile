@@ -17,6 +17,8 @@
   /* 發・中は伝統的な色分けに合わせる */
   --ink-hatsu: var(--ink-s);
   --ink-chun: var(--tile-red);
+  /* 萬子の「萬」の字も実物同様に朱色にする */
+  --ink-man-kanji: #b93c3c;
 
   /* 安全度5段階（4.5.1） */
   --lv1: #2e9e5b;
