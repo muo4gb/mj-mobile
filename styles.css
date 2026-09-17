@@ -14,6 +14,9 @@
   --ink-s: #1f7a43;
   --ink-p: #1d5c94;
   --ink-z: #23262b;
+  /* 發・中は伝統的な色分けに合わせる */
+  --ink-hatsu: var(--ink-s);
+  --ink-chun: var(--tile-red);
 
   /* 安全度5段階（4.5.1） */
   --lv1: #2e9e5b;

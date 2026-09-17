@@ -1,7 +1,11 @@
 // 牌の絵柄。線・複製図形をpath化し、白抜き部分を差し引いた単色の輪郭。
 // 色は牌種ごとのCSS変数で指定する。
 
-import { suitOf } from '../core/tiles.js';
+import { suitOf, DRAGONS } from '../core/tiles.js';
+
+const [, HATSU, CHUN] = DRAGONS;
+/** 發・中は字牌の中でも伝統的に緑・赤で塗り分ける。他の字牌は牌種の色のまま。 */
+const HONOR_COLOR = { [HATSU]: 'var(--ink-hatsu)', [CHUN]: 'var(--ink-chun)' };
 
 /** 絵柄を置く範囲 */
 const FACE = { x: 7, y: 9, w: 26, h: 38 };
@@ -2256,7 +2260,7 @@ const PATHS = [
  */
 export function tileSvg(index, { red = false, dim = false } = {}) {
   const suit = suitOf(index);
-  const color = red ? 'var(--tile-red)' : `var(--ink-${suit})`;
+  const color = red ? 'var(--tile-red)' : (HONOR_COLOR[index] || `var(--ink-${suit})`);
   const body = PATHS[index]
     ? `<g transform="${FACE_TRANSFORM}"><path d="${PATHS[index]}" fill="${color}"/></g>`
     : '';
