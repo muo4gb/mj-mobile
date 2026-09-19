@@ -194,6 +194,8 @@ function renderStepHaipai(init, state, need) {
       return `<button class="hand-tile" data-remove="${t}">${tileSvg(index, { red })}</button>`;
     })
     .join('');
+  const emptySlots = Array.from({ length: Math.max(0, left) },
+    () => '<span class="hand-tile is-empty" aria-hidden="true"></span>').join('');
 
   return `
     <p class="setup-lead">配牌を入力してください${state.dealer === SEATS.SELF ? '（親なので14枚）' : ''}</p>
@@ -201,7 +203,8 @@ function renderStepHaipai(init, state, need) {
       <strong>${init.hand.length}</strong><span class="of">/ ${need}</span>
       <span class="left-label">${left > 0 ? `あと${left}枚` : '入力できました'}</span>
     </div>
-    <div class="hand">${tiles || '<span class="empty">下のパッドからタップして入力。入れた牌をタップすると消せます</span>'}</div>
+    <div class="hand">${tiles}${emptySlots}</div>
+    ${tiles ? '' : '<p class="empty">下のパッドからタップして入力。入れた牌をタップすると消せます</p>'}
     ${init.doraIndicator ? '' : '<p class="setup-warn">ドラ表示牌が未選択です</p>'}
     <div class="setup-nav">
       <button class="ghost" data-step="2">戻る</button>
